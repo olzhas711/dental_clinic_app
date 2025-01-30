@@ -7,9 +7,9 @@ class DocumentsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Документы'),
+        title: const Text('Документы'),
       ),
-      body: Center(
+      body: const Center(
         child: Text('Ваши документы будут здесь.'),
       ),
     );

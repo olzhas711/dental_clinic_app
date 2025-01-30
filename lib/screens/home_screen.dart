@@ -1,204 +1,120 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:dental_clinic_app/screens/appointment_screen.dart';
-import 'package:dental_clinic_app/screens/auth_screen.dart';
-import 'package:dental_clinic_app/screens/messages_screen.dart';
-import 'package:dental_clinic_app/screens/profile_screen.dart';
-import 'package:dental_clinic_app/screens/store_screen.dart';
-import 'package:dental_clinic_app/screens/video_consultation_screen.dart';
+import 'package:go_router/go_router.dart';
+import '../screens/about_clinic_screen.dart';
+import '../screens/login_screen.dart';
 
 class HomeScreen extends StatelessWidget {
-  final bool isGuest;
-  final String? userName;
-  final String? userEmail;
-  final String? userPhone;
-
-  const HomeScreen({
-    super.key, 
-    this.isGuest = false, 
-    this.userName, 
-    this.userEmail,
-    this.userPhone
-  });
-
-  void _checkAuthAndNavigate(BuildContext context, Widget screen, bool requireAuth) {
-    // Для демо-пользователя всегда разрешаем доступ
-    if (FirebaseAuth.instance.currentUser?.email == 'demo@clinic.com') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => screen),
-      );
-      return;
-    }
-
-    if (requireAuth && isGuest) {
-      _showAuthRequiredDialog(context, screen);
-    } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => screen),
-      );
-    }
-  }
-
-  void _showAuthRequiredDialog(BuildContext context, Widget screen) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Требуется авторизация'),
-        content: Text('Для доступа к этому разделу необходимо войти в аккаунт.'),
-        actions: [
-          TextButton(
-            child: Text('Отмена'),
-            onPressed: () => Navigator.of(ctx).pop(),
-          ),
-          ElevatedButton(
-            child: Text('Войти'),
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => AuthScreen()),
-              ).then((_) => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => screen),
-              ));
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  const HomeScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Стоматологическая клиника "Зуб даю"'),
+        title: const Text('Личный кабинет'),
         actions: [
-          if (!isGuest) ...[
-            IconButton(
-              icon: Icon(Icons.person),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProfileScreen(userName: userName),
-                  ),
-                );
-              },
-            ),
-          ],
           IconButton(
-            icon: Icon(Icons.chat),
-            onPressed: () {
-              _checkAuthAndNavigate(
-                context, 
-                MessagesScreen(), 
-                false
-              );
-            },
+            icon: const Icon(Icons.exit_to_app),
+            onPressed: () => context.go('/login'),
           ),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Добро пожаловать, ${userName ?? 'Пользователь'}!',
-                      style: Theme.of(context).textTheme.headlineMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 20),
-                    Center(
-                      child: Image.asset(
-                        'assets/images/clinic_logo.png', 
-                        height: 200,
-                        width: 200,
-                      ),
-                    ),
-                    SizedBox(height: 20),
-                    _buildServiceCard(
-                      context,
-                      'Записаться на прием',
-                      Icons.calendar_today,
-                      () => _checkAuthAndNavigate(
-                        context, 
-                        AppointmentScreen(
-                          isGuest: isGuest,
-                          userName: userName,
-                        ),
-                        true
-                      ),
-                    ),
-                    SizedBox(height: 16),
-                    _buildServiceCard(
-                      context,
-                      'Онлайн консультация',
-                      Icons.video_call,
-                      () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => VideoConsultationScreen(
-                            isGuest: isGuest
-                          )
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-                    _buildServiceCard(
-                      context,
-                      'Стоматологический магазин',
-                      Icons.shopping_cart,
-                      () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => StoreScreen(isGuest: isGuest)
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const UserProfileHeader(),
+          const SizedBox(height: 20),
+          _buildMenuCard(
+            context: context,
+            title: 'Мои записи',
+            icon: Icons.calendar_today,
+            onTap: () => context.push('/appointments'),
+          ),
+          _buildMenuCard(
+            context: context,
+            title: 'Магазин',
+            icon: Icons.shopping_cart,
+            onTap: () => context.push('/shop'),
+          ),
+          _buildMenuCard(
+            context: context,
+            title: 'О клинике',
+            icon: Icons.local_hospital,
+            onTap: () {
+              Navigator.push(
+                context, 
+                MaterialPageRoute(builder: (_) => const AboutClinicScreen())
+              );
+            },
+          ),
+          _buildMenuCard(
+            context: context,
+            title: 'Профиль',
+            icon: Icons.person,
+            onTap: () => context.push('/profile'),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildServiceCard(
-    BuildContext context,
-    String title,
-    IconData icon,
-    VoidCallback onTap,
-  ) {
+  Widget _buildMenuCard({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return Card(
-      child: InkWell(
+      elevation: 4,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: ListTile(
+        leading: Icon(icon, color: Colors.blue),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              Icon(icon, size: 40),
-              SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge,
-                  overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+class UserProfileHeader extends StatelessWidget {
+  const UserProfileHeader({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const CircleAvatar(
+              radius: 40,
+              backgroundImage: AssetImage('assets/images/default_avatar.png'),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Иванов Иван',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-            ],
-          ),
+                Text(
+                  'Пациент',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

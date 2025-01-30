@@ -1,105 +1,80 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/appointment.dart';
-import 'welcome_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:dental_clinic_app/models/user_model.dart';
 
 class ProfileScreen extends StatefulWidget {
-  final String? userName;
-  final String? email;
-  final String? phone;
-
-  const ProfileScreen({
-    Key? key, 
-    this.userName, 
-    this.email, 
-    this.phone
-  }) : super(key: key);
+  const ProfileScreen({Key? key}) : super(key: key);
 
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _auth = FirebaseAuth.instance;
-  final _firestore = FirebaseFirestore.instance;
-
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  bool _isEditing = false;
+  UserModel? _currentUser;
+  File? _imageFile;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _loadUserProfile();
   }
 
-  void _loadUserData() {
-    User? currentUser = _auth.currentUser;
-    if (currentUser != null) {
-      _nameController.text = widget.userName ?? currentUser.displayName ?? '';
-      _phoneController.text = widget.phone ?? '';
-      // Загрузка номера телефона из Firestore
-      _firestore.collection('users').doc(currentUser.uid).get().then((doc) {
-        if (doc.exists) {
+  Future<void> _loadUserProfile() async {
+    // TODO: Получить текущего пользователя, например, по ID
+    final user = await UserModel.loadUser('current_user_id');
+    setState(() {
+      _currentUser = user;
+    });
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final pickedFile = await _picker.pickImage(source: source);
+      if (pickedFile != null) {
+        final imageFile = File(pickedFile.path);
+        
+        if (_currentUser != null) {
+          await _currentUser!.saveProfileImage(imageFile);
           setState(() {
-            _phoneController.text = doc.data()?['phone'] ?? '';
+            _imageFile = imageFile;
           });
         }
-      });
-    }
-  }
-
-  void _saveUserData() async {
-    User? currentUser = _auth.currentUser;
-    if (currentUser != null) {
-      try {
-        // Обновление имени в Firebase Auth
-        await currentUser.updateDisplayName(_nameController.text);
-
-        // Сохранение номера телефона в Firestore
-        await _firestore.collection('users').doc(currentUser.uid).set({
-          'name': _nameController.text,
-          'phone': _phoneController.text,
-        }, SetOptions(merge: true));
-
-        setState(() {
-          _isEditing = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Профиль обновлен')),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка обновления: ${e.toString()}')),
-        );
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка выбора изображения: $e')),
+      );
     }
   }
 
-  void _showLogoutDialog(BuildContext context) {
+  void _showImageSourceDialog() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Выход'),
-        content: Text('Вы уверены, что хотите выйти?'),
-        actions: [
-          TextButton(
-            child: Text('Отмена'),
-            onPressed: () => Navigator.of(ctx).pop(),
-          ),
-          ElevatedButton(
-            child: Text('Выйти'),
-            onPressed: () {
-              _auth.signOut();
-              Navigator.of(ctx).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => WelcomeScreen()),
-                (Route<dynamic> route) => false,
-              );
-            },
-          ),
-        ],
+      builder: (context) => AlertDialog(
+        title: const Text('Выберите источник изображения'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Камера'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Галерея'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -108,118 +83,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Профиль'),
-        actions: [
-          IconButton(
-            icon: Icon(_isEditing ? Icons.save : Icons.edit),
-            onPressed: () {
-              setState(() {
-                if (_isEditing) {
-                  _saveUserData();
-                } else {
-                  _isEditing = true;
-                }
-              });
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: () => _showLogoutDialog(context),
-          ),
-        ],
+        title: const Text('Профиль'),
       ),
-      body: ListView(
-        padding: EdgeInsets.all(16),
-        children: [
-          TextField(
-            controller: _nameController,
-            decoration: InputDecoration(
-              labelText: 'Имя',
-              enabled: _isEditing,
-            ),
-          ),
-          SizedBox(height: 16),
-          TextField(
-            controller: _phoneController,
-            decoration: InputDecoration(
-              labelText: 'Телефон',
-              enabled: _isEditing,
-            ),
-            keyboardType: TextInputType.phone,
-          ),
-          SizedBox(height: 24),
-          Text(
-            'Мои записи',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          _buildAppointmentsList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAppointmentsList() {
-    User? currentUser = _auth.currentUser;
-    if (currentUser == null) {
-      return Text('Войдите в систему для просмотра записей');
-    }
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('appointments')
-          .where('userId', isEqualTo: currentUser.uid)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Text('У вас пока нет записей');
-        }
-
-        return Column(
-          children: snapshot.data!.docs.map((doc) {
-            var appointmentData = doc.data() as Map<String, dynamic>;
-            var appointment = Appointment.fromMap(appointmentData);
-
-            return Card(
-              child: ListTile(
-                title: Text('${appointment.specialistName}'),
-                subtitle: Text(
-                  '${appointment.date.day}.${appointment.date.month}.${appointment.date.year} в ${appointment.time}',
-                ),
-                trailing: IconButton(
-                  icon: Icon(Icons.delete, color: Colors.red),
-                  onPressed: () {
-                    _deleteAppointment(doc.id);
-                  },
-                ),
+      body: _currentUser == null 
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: _showImageSourceDialog,
+                    child: CircleAvatar(
+                      radius: 80,
+                      backgroundColor: Colors.grey[200],
+                      backgroundImage: _imageFile != null
+                          ? FileImage(_imageFile!)
+                          : (_currentUser?.profileImagePath != null
+                              ? FileImage(File(_currentUser!.profileImagePath!))
+                              : null),
+                      child: _imageFile == null && _currentUser?.profileImagePath == null
+                          ? const Icon(Icons.camera_alt, size: 50)
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _currentUser!.name,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    _currentUser!.email,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
-            );
-          }).toList(),
-        );
-      },
+            ),
+          ),
     );
-  }
-
-  void _deleteAppointment(String appointmentId) async {
-    try {
-      await _firestore.collection('appointments').doc(appointmentId).delete();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Запись удалена')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка удаления: ${e.toString()}')),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    super.dispose();
   }
 }

@@ -7,9 +7,9 @@ class BonusScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Бонусы'),
+        title: const Text('Бонусы'),
       ),
-      body: Center(
+      body: const Center(
         child: Text('Ваши бонусы и реферальная программа.'),
       ),
     );
